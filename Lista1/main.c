@@ -13,7 +13,7 @@ typedef struct thread_data
 } thread_data;
 
 int is = 0;
-void fill_vector(unsigned long long *vector, long long size_vector)
+void fill_vector(unsigned long long *vector, unsigned long long size_vector)
 {
     for (int i = 0; i < size_vector; i++)
     {
@@ -31,10 +31,10 @@ void *thread_summation(void *thread_pack)
         sum_thread += pack->vector[i];
 
     // printf("Thread %lld finished\n", pack->thread_number);
-    return (void *) sum_thread;
+    return (void *)sum_thread;
 }
 
-void calculate_serial(long long size_vector, unsigned long long *vector)
+void calculate_serial(unsigned long long size_vector, unsigned long long *vector)
 {
     unsigned long long i, sum_vector = 0;
     clock_t time;
@@ -47,9 +47,21 @@ void calculate_serial(long long size_vector, unsigned long long *vector)
     }
     time = clock() - time;
     printf("The sum of %lld elements in Serial Mode took %ld clicks\nFinal result: %lld\n", size_vector, time, sum_vector);
+
+    FILE *log = NULL;
+    log = fopen("./results_serial.log", "a");
+
+    if (log == NULL)
+    {
+        printf("Error! can't open log file.");
+        return NULL;
+    }
+
+    fprintf(log, "%2d \t\t %10ld \t %20lld\n", 1, time, size_vector);
+    fclose(log);
 }
 
-int calculate_thread(long long size_vector, unsigned long long *vector, int number_threads)
+int calculate_thread(unsigned long long size_vector, unsigned long long *vector, int number_threads)
 {
     int error_thread = 0;
     unsigned long long i, partial_result, sum_vector = 0, block_size;
@@ -94,21 +106,32 @@ int calculate_thread(long long size_vector, unsigned long long *vector, int numb
 
     for (i = 0; i < number_threads; i++)
     {
-        error_thread = pthread_join(thread_vector[i].id, (void *) &partial_result);
+        error_thread = pthread_join(thread_vector[i].id, (void *)&partial_result);
 
         if (error_thread != 0)
         {
             // printf("Fail to receive Thread %lld\n", i);
             return (-2 * i);
         }
-        
-        sum_vector += partial_result;
 
+        sum_vector += partial_result;
         // printf("Thread %lld closed\n", i);
     }
     time = clock() - time;
 
     printf("The sum of %lld elements in Multithread Mode took %ld clicks\nFinal result: %lld\n", size_vector, time, sum_vector);
+
+    FILE *log = NULL;
+    log = fopen("./results_thread.log", "a");
+
+    if (log == NULL)
+    {
+        printf("Error! can't open log file.");
+        return -1;
+    }
+
+    fprintf(log, "%2d \t\t %10ld \t %20lld\n", number_threads, time, size_vector);
+    fclose(log);
 
     return 0;
 }
@@ -116,7 +139,7 @@ int calculate_thread(long long size_vector, unsigned long long *vector, int numb
 int main(int argc, char **argv)
 {
     int number_threads;
-    long long size_vector;
+    unsigned long long size_vector;
     char *eptr;
     /* */
     size_vector = strtoull(argv[1], &eptr, 10);
