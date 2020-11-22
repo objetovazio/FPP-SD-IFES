@@ -137,3 +137,5 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
+// $ gcc -Wall -pedantic -o main.exe main.c -lpthread
