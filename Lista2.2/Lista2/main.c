@@ -10,16 +10,17 @@
 typedef struct thread_data
 {
 	pthread_t id;
-	int thread_number;
+	unsigned long long thread_number;
 	unsigned long long start;
 	unsigned long long end;
-	unsigned long long partial_sum;
 	int *vector;
 
-	pthread_mutex_t *mutex;
-	pthread_cond_t *cond;
+	unsigned long long partial_sum;
 	int *thread_counter;
 	int *total_of_threads;
+	sem_t *semaphore_counter;
+	sem_t *semaphore_barrier;
+	int isLastThread;
 	clock_t *time;
 } thread_data;
 
@@ -36,24 +37,29 @@ void *thread_summation(void *thread_pack)
 	thread_data *pack = thread_pack;
 	unsigned long long sum_thread = 0;
 
-	pthread_mutex_lock(pack->mutex);
-	(*pack->thread_counter)++;
-	// printf("Thread %d locked the mutex. Total %d \n", *pack->thread_counter, *pack->total_of_threads);
-	if (*pack->thread_counter == *pack->total_of_threads)
+	sem_wait(pack->semaphore_counter);
+	if (pack->isLastThread) /* Case its last thread */
 	{
-		// printf("Thread %d Arrived - Last Thread \n", pack->thread_number);
-		*pack->thread_counter = 0;
-		*pack->time = clock();
-		pthread_cond_broadcast(pack->cond);
+		pack->thread_counter = 0;
+		*pack->time = clock(); 
+		sem_post(pack->semaphore_counter);
+		for (int i = 0; i < *pack->total_of_threads; i++) 
+		{
+			sem_post(pack->semaphore_barrier);
+		}
 	}
-	else while (pthread_cond_wait(pack->cond, pack->mutex) != 0);
-	pthread_mutex_unlock(pack->mutex);
+	else
+	{
+		*(pack->thread_counter++);
+		sem_post(pack->semaphore_counter);
+		sem_wait(pack->semaphore_barrier);
+	}
 
-	// printf("Thread %d is processing from %lld to %lld \n", pack->thread_number, pack->start, pack->end);
+	// printf("Thread %lld is processing from %lld to %lld \n", pack->thread_number, pack->start, pack->end);
 	for (unsigned long long i = pack->start; i < pack->end; i++)
 		sum_thread += pack->vector[i];
 
-	// printf("Thread %d finished\n", pack->thread_number);
+	// printf("Thread %lld finished\n", pack->thread_number);
 	pack->partial_sum = sum_thread;
 }
 
@@ -90,8 +96,8 @@ int calculate_thread(unsigned long long size_vector, int *vector, int number_thr
 	int error_thread, thread_counter;
 	unsigned long long i, sum_vector, block_size;
 	clock_t time;
-	pthread_mutex_t mutex;
-	pthread_cond_t cond;
+	sem_t semaphore_counter;
+	sem_t semaphore_barrier;
 
 	/* Setting inicial Value */
 	sum_vector = 0;
@@ -100,8 +106,8 @@ int calculate_thread(unsigned long long size_vector, int *vector, int number_thr
 	block_size = size_vector / number_threads;
 
 	/* Instantiate Semaphores and Malloc Threads Packages Array */
-	pthread_mutex_init(&mutex, NULL);
-	pthread_cond_init(&cond, NULL);
+	sem_init(&semaphore_counter, 0, 1);
+	sem_init(&semaphore_barrier, 0, 0);
 	thread_data *thread_vector = malloc(sizeof(thread_data) * number_threads);
 
 	/* Populate Thread Packages */
@@ -113,16 +119,18 @@ int calculate_thread(unsigned long long size_vector, int *vector, int number_thr
 		if (i == number_threads - 1)
 		{
 			thread_vector[i].end = size_vector;
+			thread_vector[i].isLastThread = 1;
 		}
 		else
 		{
 			thread_vector[i].end = block_size * (i + 1);
+			thread_vector[i].isLastThread = 0;
 		}
 
 		thread_vector[i].vector = vector;
 		thread_vector[i].thread_counter = &thread_counter;
-		thread_vector[i].mutex = &mutex;
-		thread_vector[i].cond = &cond;
+		thread_vector[i].semaphore_counter = &semaphore_counter;
+		thread_vector[i].semaphore_barrier = &semaphore_barrier;
 		thread_vector[i].time = &time; 
 		thread_vector[i].total_of_threads = &number_threads;
 		// printf("The thread %lld will process from %lld to %lld\n", thread_vector[i].thread_number, thread_vector[i].start, thread_vector[i].end);
