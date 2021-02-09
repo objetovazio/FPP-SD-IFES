@@ -30,7 +30,7 @@ typedef struct infected_data {
 	int total_vaccines;
 
 	// TODO: Fail to malloc supplie array dinamically HELP 
-	int supplies_needed_id[2];
+	int supplies_needed_type[2];
 
 } infected_data;
 
@@ -45,7 +45,8 @@ typedef struct laboratory_data {
 	int total_restocking;
 
 	// TODO: Fail to malloc supplie array dinamically HELP 
-	supply supplies_production[2];
+	supply *supplies_production;
+
 	int supplies_production_id[2];
 	int total_supplies_by_lab;
 } laboratory_data;
@@ -86,7 +87,7 @@ void fill_laboratory_data(laboratory_data *array_labs, int size_of_labs, supply 
 		array_labs[i].total_supplies_by_lab = total_supplies_by_lab;
 
 		// TODO: Fail to malloc supplies array dinamically HELP 
-		// array_labs[i].supplies_production = malloc(sizeof(supply) * total_supplies_by_lab);
+		array_labs[i].supplies_production = malloc(sizeof(supply) * total_supplies_by_lab);
 
 		// Set to supplies_production the supplies that the lab will produce (the semaphores) PS: Attencion to the "++" operator
 		int j = 0;
@@ -97,7 +98,7 @@ void fill_laboratory_data(laboratory_data *array_labs, int size_of_labs, supply 
 			int lab_id = array_labs[i].thread_number;
 			int supply_id = array_labs[i].supplies_production[j].id;
 			int supply_type = array_labs[i].supplies_production[j].type;
-			//printf("# LAB %d: Semaphore[Id:%d][Type:%d]\n", lab_id, supply_id, supply_type);
+			printf("# LAB %d: Semaphore[Id:%d][Type:%d]\n", lab_id, supply_id, supply_type);
 
 			j++;
 			supplies_index++;
@@ -124,7 +125,7 @@ void fill_infected_data(infected_data *array_inf, int size_of_infected, supply *
 		// Set to supplies_needed_id the supplies ID that the infected have to find on the table
 		int j = 0;
 		while (j < total_supplies_needed_infected) {
-			array_inf[i].supplies_needed_id[j] = supplies_index;
+			array_inf[i].supplies_needed_type[j] = supplies_index;
 
 			// Rotates the supplies_index to the max, and then back to 0; 
 			if (supplies_index == size_of_supplies - 1) supplies_index = 0;
@@ -192,65 +193,6 @@ void *laboratory(void *thread_pack) {
 	printf(">>>> Lab %d: Ended.\n", lab_id);
 }
 
-void *laboratory_test(void *thread_pack) {
-	laboratory_data *pack = thread_pack;
-
-	int counterTest = 5; // Temporary
-	int i, emptySupplies;
-
-	int lab_id = pack->thread_number;
-
-	if (lab_id == 0 || lab_id == 1) return (void*)pack; // Temporary
-
-	do {
-		emptySupplies = TRUE;
-		pthread_mutex_lock(pack->mutex_table);
-
-		int supply_id, supply_type, supply_val, supply_old_val;
-		// Check if all lab supplies are empty
-		for (i = 0; i < pack->total_supplies_by_lab; i++) {
-			supply supply_lab = pack->supply_table[pack->supplies_production_id[i]];
-			supply_id = supply_lab.id;
-			supply_type = supply_lab.type;
-			sem_getvalue(&supply_lab.semaphore_supply, &supply_val);
-
-			#if DEBUG_MODE
-			printf("> LAB %d: Semaphore[Id:%d][Type:%d] has Value %d (i-%d) -- CounterTest: %d\n", lab_id, supply_id, supply_type, supply_val, i, counterTest);
-			#endif
-
-			if (supply_val == 1) {
-				emptySupplies = FALSE;
-				break;
-			}
-		}
-
-		// If all of them are empty, create new ones
-		if (emptySupplies) {
-			for (i = 0; i < pack->total_supplies_by_lab; i++) {
-				supply supply_lab = pack->supply_table[pack->supplies_production_id[i]];
-
-				sem_getvalue(&supply_lab.semaphore_supply, &supply_old_val);
-				sem_post(&supply_lab.semaphore_supply);
-				sem_getvalue(&supply_lab.semaphore_supply, &supply_val);
-
-				#if DEBUG_MODE
-				supply_id = supply_lab.id;
-				supply_type = supply_lab.type;
-				printf(">> LAB %d: Semaphore[Id:%d][Type:%d] changed value from: %d > to: %d\n", lab_id, supply_id, supply_type, supply_old_val, supply_val);
-				#endif 
-			}
-
-			#if DEBUG_MODE
-			printf(">>> Lab %d is Empty. Supplies refilled.\n", lab_id);
-			#endif
-		}
-
-		counterTest--;
-	} while (counterTest);
-
-	printf(">>>> Lab %d: Ended.\n", lab_id);
-}
-
 
 //void *infected(void *pack) {
 //
@@ -258,7 +200,7 @@ void *laboratory_test(void *thread_pack) {
 
 int main(int argc, char **argv)
 {
-	int total_vaccines_objective, size_of_labs, size_of_infected, size_of_supplies, total_supplies_by_lab, total_supplies_needed_infected;
+	int total_vaccines_objective, total_vaccines_objective_prod, size_of_labs, size_of_infected, size_of_supplies, total_supplies_by_lab, total_supplies_needed_infected;
 
 	/* Instanciation of variables */
 	size_of_labs                   = 3;
@@ -285,7 +227,7 @@ int main(int argc, char **argv)
 	int error_thread;
 	for (int i = 0; i < size_of_labs; i++)
 	{
-		error_thread = pthread_create(&(array_laboratory[i].id), NULL, laboratory_test, &(array_laboratory[i]));
+		error_thread = pthread_create(&(array_laboratory[i].id), NULL, laboratory, &(array_laboratory[i]));
 
 		if (error_thread != 0)
 		{
