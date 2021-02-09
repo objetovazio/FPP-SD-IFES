@@ -1,10 +1,5 @@
 ﻿  Main.c
-d:\github\fpp-sd-ifes\trabalho1\trabalho1\main.c(220): warning C4047: 'function': 'pthread_mutex_t *' differs in levels of indirection from 'pthread_mutex_t **'
-d:\github\fpp-sd-ifes\trabalho1\trabalho1\main.c(220): warning C4024: 'pthread_mutex_init': different types for formal and actual parameter 1
-d:\github\fpp-sd-ifes\trabalho1\trabalho1\main.c(203): warning C4101: 'total_vaccines_objective_prod': unreferenced local variable
   Generating code
-  2 of 8 functions (25.0%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    0 functions had inline decision re-evaluated but remain unchanged
+  All 7 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
   Finished generating code
   Trabalho1.vcxproj -> D:\GitHub\FPP-SD-IFES\Trabalho1\Release\Trabalho1.exe

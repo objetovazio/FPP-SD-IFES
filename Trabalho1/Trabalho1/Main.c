@@ -1,5 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS 1 
-#define _WINSOCK_DEPRECATED_NO_WARNINGS 1 
+//#define _WINSOCK_DEPRECATED_NO_WARNINGS 1 
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -149,6 +149,7 @@ void *laboratory(void *thread_pack) {
 
 	do {
 		emptySupplies = TRUE;
+
 		pthread_mutex_lock(pack->mutex_table);
 
 		int supply_id, supply_type, supply_val, supply_old_val;
@@ -164,6 +165,7 @@ void *laboratory(void *thread_pack) {
 
 			if (supply_val == 1) {
 				emptySupplies = FALSE;
+				pthread_mutex_unlock(pack->mutex_table);
 				break;
 			}
 		}
@@ -187,10 +189,13 @@ void *laboratory(void *thread_pack) {
 			#endif
 		}
 
+		pthread_mutex_unlock(pack->mutex_table);
 		counterTest--;
 	} while (counterTest);
 
 	printf(">>>> Lab %d: Ended.\n", lab_id);
+
+	return NULL;
 }
 
 
@@ -200,7 +205,7 @@ void *laboratory(void *thread_pack) {
 
 int main(int argc, char **argv)
 {
-	int total_vaccines_objective, total_vaccines_objective_prod, size_of_labs, size_of_infected, size_of_supplies, total_supplies_by_lab, total_supplies_needed_infected;
+	int total_vaccines_objective, size_of_labs, size_of_infected, size_of_supplies, total_supplies_by_lab, total_supplies_needed_infected;
 
 	/* Instanciation of variables */
 	size_of_labs                   = 3;
@@ -216,13 +221,13 @@ int main(int argc, char **argv)
 	infected_data *array_infected     = malloc(sizeof(infected_data) * size_of_infected); // 3 Infected. Each infected needs 2 different types of supply to create the vaccine.
 
 	// Start mutex_table
-	pthread_mutex_t *mutex_table;
+	pthread_mutex_t mutex_table;
 	pthread_mutex_init(&mutex_table, NULL);
 
 	// Fill supplies, lab data, infected data
-	fill_supplies_data(array_supplies, size_of_supplies, total_supplies_by_lab);
-	fill_laboratory_data(array_laboratory, size_of_labs, array_supplies, size_of_supplies, total_supplies_by_lab, mutex_table);
-	fill_infected_data(array_infected, size_of_infected, array_supplies, size_of_supplies, total_supplies_needed_infected, total_vaccines_objective, mutex_table);
+ 	fill_supplies_data(array_supplies, size_of_supplies, total_supplies_by_lab);
+	fill_laboratory_data(array_laboratory, size_of_labs, array_supplies, size_of_supplies, total_supplies_by_lab, &mutex_table);
+	//fill_infected_data(array_infected, size_of_infected, array_supplies, size_of_supplies, total_supplies_needed_infected, total_vaccines_objective, &mutex_table);
 
 	int error_thread;
 	for (int i = 0; i < size_of_labs; i++)
