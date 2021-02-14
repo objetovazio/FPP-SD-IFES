@@ -124,17 +124,15 @@ void fill_laboratory_data(
 		array_labs[i].size_of_infected = size_of_infected;
 		array_labs[i].size_of_labs = size_of_labs;
 
-		// TODO: Fail to malloc supplies array dinamically HELP
+		// Malloc supplies array dinamically
 		array_labs[i].supplies_production_position = malloc(sizeof(int) * total_supplies_by_lab);
 		array_labs[i].supplies_production_size = total_supplies_by_lab;
 
-		// Set to supplies_production the supplies that the lab will produce (the semaphores) PS: Attencion to the "++" operator
+		// Set to supplies_production_position the POSITION of Supplies on the table that the lab will produce (the semaphores) PS: Attencion to the "++" operator
 		int j = 0;
 		while (j < total_supplies_by_lab)
 		{
-			array_labs[i].supplies_production_position[j] = supplies_index; // Set the position of supply
-			j++;
-			supplies_index++;
+			array_labs[i].supplies_production_position[j++] = supplies_index++; // Set the position of supply. Add +1 to "j" and "supplies_index" AFTER the command runs.
 		}
 	}
 }
@@ -167,13 +165,13 @@ void fill_infected_data(
 		array_inf[i].shared_objectives = shared_objectives;
 		array_inf[i].mutex_shared_objectives = mutex_shared_objectives;
 
-		// TODO: Fail to malloc supplies array dinamically HELP
+		// Malloc supplies array dinamically
 		array_inf[i].supplies_type_needed = malloc(sizeof(int) * total_supplies_needed_infected);
 		array_inf[i].supplies_type_needed_size = total_supplies_needed_infected;
 		array_inf[i].size_of_infected = size_of_infected;
 		array_inf[i].size_of_labs = size_of_labs;
 
-		// Set to supplies_needed_id the supplies ID that the infected have to find on the table
+		// Set to supplies_type_needed the Type that the infected have to find on the table
 		int j = 0;
 		while (j < total_supplies_needed_infected)
 		{
@@ -211,9 +209,11 @@ void *laboratory(void *thread_pack)
 
 	do
 	{
-#if DEBUG_MODE
+		#if DEBUG_MODE
 		printf("> Lab %d: Objective Status: Done %d | LAB: %d | INF: %d \n", lab_id, lab_pack->total_restocking, lab_pack->shared_objectives[0], lab_pack->shared_objectives[1]);
-#endif
+		#endif
+
+		// If already completed the objective, wait 10 miliseconds before continue.
 		if (lab_pack->total_restocking > lab_pack->total_restocking_objective) {
 			Sleep(10);
 		}
@@ -228,9 +228,9 @@ void *laboratory(void *thread_pack)
 
 			sem_getvalue(&supply_helper->semaphore_supply, &supply_val); // Gets the actual value of the Semaphore and set it to supply_val. 0: Supply Unavaiable, 1: Supply Avaiable.
 
-#if DEBUG_MODE
-			//printf("> LAB %d: is checking Supply[ID:%d][Type:%d] has Value %d SEM_MEM: %p \n", lab_id, supply_helper->id, supply_helper->type, supply_val, supply_helper->semaphore_supply);
-#endif
+			#if DEBUG_MODE
+			printf("> LAB %d: is checking Supply[ID:%d][Type:%d] has Value %d SEM_MEM: %p \n", lab_id, supply_helper->id, supply_helper->type, supply_val, supply_helper->semaphore_supply);
+			#endif
 
 			if (supply_val == 1)
 			{
@@ -259,14 +259,14 @@ void *laboratory(void *thread_pack)
 			supply_helper = &lab_pack->supply_table[supply_position_table];	   // Sets the instance of the supply to supply_helper
 
 			// Just get the old value and print on debug mode, else just post the semaphore value
-#if DEBUG_MODE
+			#if DEBUG_MODE
 			sem_getvalue(&supply_helper->semaphore_supply, &supply_old_val);
 			sem_post(&supply_helper->semaphore_supply);
 			sem_getvalue(&supply_helper->semaphore_supply, &supply_val);
-			//printf("> LAB %d: reestocking Supply[ID:%d][Type:%d] from: %d > to: %d - SEM_MEM: %p \n", lab_id, supply_helper->id, supply_helper->type, supply_old_val, supply_val, supply_helper->semaphore_supply);
-#else
+			printf("> LAB %d: reestocking Supply[ID:%d][Type:%d] from: %d > to: %d - SEM_MEM: %p \n", lab_id, supply_helper->id, supply_helper->type, supply_old_val, supply_val, supply_helper->semaphore_supply);
+			#else
 			sem_post(&supply_helper->semaphore_supply);
-#endif
+			#endif
 		}
 		pthread_mutex_unlock(lab_pack->mutex_table); // END OF CRITICAL REGION - supply_table
 
@@ -281,11 +281,8 @@ void *laboratory(void *thread_pack)
 			pthread_mutex_unlock(lab_pack->mutex_shared_objectives); // END OF CRITICAL REGION - mutex_shared_objectives
 
 			printf("> Lab %d: Objective Completed. Labs Completed: %d | Infected Completed: %d \n", lab_id, lab_pack->shared_objectives[0], lab_pack->shared_objectives[1]);
-#if DEBUG_MODE
-			printf("> Lab %d: Objective Completed. Objectives in LAB: %d | INF: %d \n", lab_id, lab_pack->shared_objectives[0], lab_pack->shared_objectives[1]);
-#endif
 		}
-		counterTest--;
+
 	} while (lab_pack->shared_objectives[0] != lab_pack->size_of_labs || lab_pack->shared_objectives[1] != lab_pack->size_of_infected);
 
 	printf("> Lab %d: Stopped. Total Reestock: %d - Objectives in LAB: %d | INF: %d \n", lab_id, lab_pack->total_restocking, lab_pack->shared_objectives[0], lab_pack->shared_objectives[1]);
@@ -295,27 +292,20 @@ void *laboratory(void *thread_pack)
 void *infected(void *thread_pack)
 {
 	infected_data *inf_pack = thread_pack;
-
 	supply *supply_helper;
-	int counterTest = 500; // Temporary
-	int i;
-	int inf_id = inf_pack->inf_id;
-	int supply_type_needed, supply_val, supply_position_table, code;
+	int i, supply_type_needed, supply_val, supply_position_table, inf_id = inf_pack->inf_id;
 
-	int *supplies_found_position = malloc(sizeof(int) * inf_pack->supplies_type_needed_size); // Store the supply that will be collectedby infected
+	// Supplies found helper
+	int *supplies_found_position = malloc(sizeof(int) * inf_pack->supplies_type_needed_size); // Store the supply that will be collected by infected
 	int supplies_found_index; // Auxiliar Variable to supplies_found_position array
-
-	// if (inf_id != 2) {
-	// 	printf("> INF %d: Terminated \n", inf_id);
-	// 	return (void*)inf_pack; // Temporary
-	// }
 
 	do
 	{
-#if DEBUG_MODE
+		#if DEBUG_MODE
 		printf("> INF %d: Objective Status: Done %d | LAB: %d | INF: %d \n", inf_id, inf_pack->total_vaccines, inf_pack->shared_objectives[0], inf_pack->shared_objectives[1]);
-#endif
-
+		#endif
+		
+		// If already completed the objective, wait 10 miliseconds before continue.
 		if (inf_pack->total_vaccines > inf_pack->total_vaccines_objective) {
 			Sleep(10);
 		}
@@ -330,27 +320,23 @@ void *infected(void *thread_pack)
 			for (int j = 0; j < inf_pack->size_of_supplies; j++) {
 				supply_helper = &inf_pack->supply_table[j]; // Supply fro table that will be verified
 
-#if DEBUG_MODE
-				//printf("> INF %d: Searchs %d | Found: %d - SEM_MEM: %p \n", inf_id, supply_type_needed, supply_helper->type, inf_pack->supply_table[j].semaphore_supply);
-#endif
-
 				// Compare if the supply in has the same type of the supply needed
 				if (supply_type_needed == supply_helper->type)
 				{
 					sem_getvalue(&supply_helper->semaphore_supply, &supply_val); // Get the quantity of this supply is avaiable
 
-#if DEBUG_MODE
+					#if DEBUG_MODE
 					printf("> INF %d: Searchs %d | Found: %d | Avaiable %d - SEM_MEM: %p \n", inf_id, supply_type_needed, supply_helper->type, supply_val, supply_helper->semaphore_supply);
-#endif
+					#endif
 
 					// If has one unit avaiable
 					if (supply_val == 1)
 					{
 						supplies_found_position[supplies_found_index++] = j; // Saves the position of the supply to use it later. Add +1 to supplies_found_index
 
-#if DEBUG_MODE
+						#if DEBUG_MODE
 						printf("> INF %d: Holding Supply Type %d | Total holding: %d -- SEM_MEM: %p \n", inf_id, supply_type_needed, supplies_found_index, supply_helper->semaphore_supply);
-#endif
+						#endif
 
 						break; // If found one supply avaiable, breaks the internal loop and continue trying to find the others
 					}
@@ -360,22 +346,12 @@ void *infected(void *thread_pack)
 
 		// In case of not found all supplies needed, continue to the next looping
 		if (!(supplies_found_index == inf_pack->supplies_type_needed_size)) {
-			counterTest--;
 			continue;
 		}
 
-		// Else, trylock the table to verify again and consume the supplies
-		/*code = pthread_mutex_trylock(inf_pack->mutex_table);
-		if (code == EBUSY) {
-			#if DEBUG_MODE
-			printf("> INF %d: Was not able to Lock the Mutex Table. Code error: %d \n", inf_id, code);
-			#endif
-			counterTest--;
-			continue;
-		}*/
+		pthread_mutex_lock(inf_pack->mutex_table); // Start of CRITICAL REGION
 
-		pthread_mutex_lock(inf_pack->mutex_table);
-
+		// Double check if its avaiable after locking the table.
 		supplies_found_index = 0;
 		for (i = 0; i < inf_pack->supplies_type_needed_size; i++) {
 			supply_position_table = supplies_found_position[i]; // Gets the position of the first supply that will be checked
@@ -387,43 +363,40 @@ void *infected(void *thread_pack)
 			}
 		}
 
-		// In case of supplies not able after LOCKING TABLE
+		// Case didnt the supplies found before locking the table are not avaiable at this point.
 		if (!(supplies_found_index == inf_pack->supplies_type_needed_size)) {
 			pthread_mutex_unlock(inf_pack->mutex_table); // END OF CRITICAL REGION - mutex_shared_objectives
-			counterTest--;
 			continue;
 		}
+		// Supplies avaiable and ready to consume
 		else {
 			for (i = 0; i < supplies_found_index; i++) {
 				supply_position_table = supplies_found_position[i]; // Gets the position of the first supply that will be checked
 				supply_helper = &inf_pack->supply_table[supply_position_table]; // Supply from table that will be verified
 
-#if DEBUG_MODE
+				#if DEBUG_MODE
 				printf("> INF %d: Consumed Supply of type %d -- SEM_MEM: %p \n", inf_id, supply_helper->type, supply_helper->semaphore_supply);
-#endif
+				#endif
 
 				sem_wait(&supply_helper->semaphore_supply); // Consume the supply
 			}
 
-			pthread_mutex_unlock(inf_pack->mutex_table); // Unlock table after consume the supplies
+			pthread_mutex_unlock(inf_pack->mutex_table); // End of CRITICAL REGION - Unlock table after consume the supplies
 
+			// Add +1 vacine made to arrive the objective
 			inf_pack->total_vaccines++;
 
+			// Verify if this infected completed the objective
 			if (inf_pack->total_vaccines == inf_pack->total_vaccines_objective)
 			{
 				pthread_mutex_lock(inf_pack->mutex_shared_objectives);  // START OF CRITICAL REGION - mutex_shared_objectives
 				inf_pack->shared_objectives[1]++; // Add one lab that finished their objective
 				pthread_mutex_unlock(inf_pack->mutex_shared_objectives); // END OF CRITICAL REGION - mutex_shared_objectives
 
-
 				printf("> INF %d: Objective Completed. Objective Completed. Labs Completed: %d | Infected Completed %d \n", inf_id, inf_pack->shared_objectives[0], inf_pack->shared_objectives[1]);
-#if DEBUG_MODE
-				printf("> INF %d: Objective Completed. Objectives in LAB: %d | INF: %d \n", inf_id, inf_pack->shared_objectives[0], inf_pack->shared_objectives[1]);
-#endif
 			}
 		}
 
-		counterTest--;
 	} while (inf_pack->shared_objectives[0] != inf_pack->size_of_labs || inf_pack->shared_objectives[1] != inf_pack->size_of_infected); // check how many labs and infected ended its work.
 
 	printf("> INF %d: Stopped. Total Vaccined %d \n", inf_id, inf_pack->total_vaccines);
@@ -432,6 +405,11 @@ void *infected(void *thread_pack)
 
 #pragma endregion
 
+/*
+*	The idea of this approach is to use an input in a parameterized way to be able to run tests in different ways, in different situations.
+*	
+*	In the begging of the code is a #define of DEBUG MODE. For tests with 1-100 of objective, its ok to use debugging mode. But to test with bigger numbers I strongly recommend to deactivate it.
+*/
 int main(int argc, char **argv)
 {
 	int total_vaccines_objective, size_of_labs, size_of_infected, size_of_supplies, total_supplies_by_lab, total_supplies_needed_infected;
@@ -443,17 +421,21 @@ int main(int argc, char **argv)
 	size_of_infected = 3;
 	total_supplies_by_lab = 2;
 	total_supplies_needed_infected = 2;
-	total_vaccines_objective = 1000000; // atoi(argv[2]);
+	total_vaccines_objective = atoi(argv[1]);
+
+	// PLEASE TAKE CARE WITH size_of_supplies. This represents that exists 3 differents kinds of supplies
+	// But you will find in the code sometimes the operation `size_of_supplies * total_supplies_by_lab`. This means that the table of supplies will have 3*2 elements, in this case.
+	// (This was a very hard bug to identify during the development. I was working with only 3 elements and didn`t notice at all).
 
 	/* Instaciation of structs */
-	supply *array_supplies = malloc(sizeof(supply) * (size_of_supplies * total_supplies_by_lab));					// In this case, array with 6 semaphores of 3 different types of supply. Supply 1, 2 and 3.
+	supply *array_supplies = malloc(sizeof(supply) * (size_of_supplies * total_supplies_by_lab)); // In this case, array with 6 semaphores of 3 different types of supply. Supply 1, 2 and 3.
 	laboratory_data *array_laboratory = malloc(sizeof(laboratory_data) * size_of_labs); // 3 Labs, each of then produce 2 types of supply. Each supply has your own semaphore.
 	infected_data *array_infected = malloc(sizeof(infected_data) * size_of_infected);	// 3 Infected. Each infected needs 2 different types of supply to create the vaccine.
 
-	// Start mutex_table
+	// Start mutex_table and mutex_shared_objectives
 	pthread_mutex_t mutex_table = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t mutex_shared_objectives = PTHREAD_MUTEX_INITIALIZER;
-	int shared_objectives[2] = { 0, 0 };
+	int shared_objectives[2] = { 0, 0 }; // Represents the number of Labs and Infecteds that completed its objective. Position 0 to Labs and 1 to Infecteds.
 
 	// Fill supplies, lab data, infected data
 	fill_supplies_data(array_supplies, size_of_supplies, total_supplies_by_lab);
@@ -507,16 +489,9 @@ int main(int argc, char **argv)
 
 	free(array_laboratory);
 	free(array_infected);
+	free(array_supplies);
 
-	/*for (int i = 0; i < size_of_supplies * total_supplies_by_lab; i++) {
-		sem_destroy(&(array_supplies[i].semaphore_supply));
-	}*/
-
-	//free(array_supplies);
-
-	printf("Terminado.");
+	printf("End of program.");
 
 	return 0;
 }
-
-// $ gcc -Wall -pedantic -o main.exe main.c -lpthread
