@@ -200,13 +200,6 @@ void *laboratory(void *thread_pack)
 	int i, emptySupplies; // Counter and helper to use as Boolean
 	int supply_val, supply_old_val, supply_position_table; // Supply Helper Identifiers to Printing
 
-	// Temporary
-	int counterTest = 1000; // Temporary
-	// if (lab_id != 2) {
-	// 	//printf("> LAB %d: Terminated \n", lab_id);
-	// 	return (void*)lab_pack; // Temporary
-	// }
-
 	do
 	{
 		#if DEBUG_MODE
@@ -242,7 +235,6 @@ void *laboratory(void *thread_pack)
 		// If the supplies are not full empty, restart looping
 		if (!emptySupplies)
 		{
-			counterTest--;
 			continue;
 		}
 
