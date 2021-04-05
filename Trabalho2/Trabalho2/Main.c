@@ -24,7 +24,6 @@
 // Set TRUE or FALSE to show or not Debug Prints
 #define DEBUG_MODE TRUE
 
-
 #pragma region Structs
 struct customer_pack;
 struct barber_pack;
@@ -44,11 +43,12 @@ typedef struct customer_pack
 
 	int status;
 	struct_semaphore *chairs_customers; // Control the number of clients waiting the attend
-	struct_semaphore *chairs_barbers; // Control the number of occuped barbers chair
 	struct_semaphore *sleeping_barbers; // Control the number of sleeping barbers
+	pthread_mutex_t *barber_verifier; // Mutex to block 1 customer to verify which barber is sleeping
 
 	pthread_cond_t haircut_signal;
 	pthread_mutex_t lock_helper;
+
 } customer_pack;
 
 typedef struct barber_pack
@@ -102,7 +102,7 @@ void *customer(void *thread_pack)
 	#endif
 
 	// Try to get a waiting chair
-	response_code = sem_trywait(&customer_pack->chairs_customers->semaphore);
+	response_code = sem_trywait(&(customer_pack->chairs_customers->semaphore));
 	
 	// If not avaible, go away
 	if (response_code == FAILURE)
@@ -114,19 +114,19 @@ void *customer(void *thread_pack)
 		return NULL;
 	}
 
+	#if DEBUG_MODE
 	// Get Free chairs
 	int free_chairs;
 	sem_getvalue(&customer_pack->chairs_customers->semaphore, &free_chairs);
-
-	#if DEBUG_MODE
 	printf("Customer %d: Is waiting on a chair. Free Chairs: %d | Mem %p\n", customer_pack->id, free_chairs, (void *) & customer_pack->chairs_customers->semaphore);
 	#endif
 
 	// Verify if there is any barber sleeping, if it has, continue
 	sem_wait(&customer_pack->sleeping_barbers->semaphore);
 
-	// TODO:::: MAKE THIS BLOCK ATOMIC - Necessary for more than 1 barber
+	#pragma region Critical Region : barber_verifier
 	// Lock to verify which one is sleeping
+	pthread_mutex_lock(&customer_pack->lock_helper);
 
 	int pos;
 	barber_pack *array_barbers = customer_pack->array_barbers;
@@ -146,15 +146,24 @@ void *customer(void *thread_pack)
 	}
 
 	// Unlock
+	pthread_mutex_unlock(&customer_pack->lock_helper);
+	#pragma endregion
 
 	// Let a waiting chair free
 	sem_post(&customer_pack->chairs_customers->semaphore);
+
+	#if DEBUG_MODE
+	sem_getvalue(&customer_pack->chairs_customers->semaphore, &free_chairs);
+	printf("Customer %d: Is sitting with Barber %d. Free waiting chairs %d!\n", customer_pack->id, customer_pack->array_barbers[pos].id, free_chairs);
+	#endif
 
 	// Wakes the barber and get a haircut
 	// sem_post(&customer_pack->chairs_barbers->semaphore);
 	pthread_cond_signal(&array_barbers[pos].time_to_work_signal);
 
+	#if DEBUG_MODE
 	printf("Customer %d: Signaling Barber %d\n", customer_pack->id, customer_pack->array_barbers[pos].id);
+	#endif
 
 	// Wait signal until haircut is done
 	pthread_mutex_lock(&customer_pack->lock_helper);
@@ -176,15 +185,17 @@ void *barber(void *thread_pack)
 	printf("Barber %d: Thread Started\n", barber_pack->id);
 	#endif
 
-	int chairs_free;
+	/*int chairs_free;
 	sem_getvalue(&barber_pack->chairs_customers->semaphore, &chairs_free);
 
 	int barber_chair_occupied;
-	sem_getvalue(&barber_pack->chairs_barbers->semaphore, &barber_chair_occupied);
+	sem_getvalue(&barber_pack->chairs_barbers->semaphore, &barber_chair_occupied);*/
 
 	// while (barber_pack->done < barber_pack->objective || chairs_free < barber_pack->num_chairs || barber_chair_occupied > 0)
 	while (TRUE)
 	{
+		#if DEBUG_MODE
+		#endif
 		printf("Barber %d: Is sleeping. Total done: %d #Locked \n", barber_pack->id, barber_pack->done);
 
 		// Stay sleeping until a customer sends a signal
@@ -192,29 +203,31 @@ void *barber(void *thread_pack)
 		pthread_cond_wait(&barber_pack->time_to_work_signal, &barber_pack->lock_helper);
 		pthread_mutex_unlock(&barber_pack->lock_helper);
 
-		printf("Signaled by: Customer %d \n", barber_pack->customer->id);
-
+		#if DEBUG_MODE
 		// When wakes attend a customer
-		printf("Barber %d: is attending Customer %d\n", barber_pack->id, barber_pack->customer->id);
-		Sleep(50); // Time Cutting Hair - FOR TESTS ONLY
+		printf("Barber %d: Signaled by Customer %d \n", barber_pack->id, barber_pack->customer->id);
+		// Sleep(5); // Time Cutting Hair - FOR TESTS ONLY
+		#endif
 
 		// Tell to customer that the haircut is done. End it and back to sleep.
 		barber_pack->status = SLEEPING;
 		barber_pack->done += 1;
 		pthread_cond_signal(&barber_pack->customer->haircut_signal);
 
+		#if DEBUG_MODE
+		printf("Barber %d: Haircut is done on Customer %d \n", barber_pack->id, barber_pack->customer->id);
+		#endif
+
 		// Update the number of free customer chairs
-		sem_getvalue(&barber_pack->chairs_customers->semaphore, &chairs_free);
-		sem_getvalue(&barber_pack->chairs_barbers->semaphore, &barber_chair_occupied);
+		/*sem_getvalue(&barber_pack->chairs_customers->semaphore, &chairs_free);
+		sem_getvalue(&barber_pack->chairs_barbers->semaphore, &barber_chair_occupied);*/
 
 		// Tells that is going back to sleep and is not occupied
 		sem_post(&barber_pack->customer->sleeping_barbers->semaphore);
-
-		printf("Barber %d: Haircut is done on Customer %d \n", barber_pack->id, barber_pack->customer->id);
 	}
 
-	printf("Barber %d: Is sleeping. Total done: %d #Ended\n", barber_pack->id, barber_pack->done);
-	printf(">>> BABEIRO FECHOU\n");
+	printf(">>> Barber %d: Is sleeping. Total done: %d #Ended\n", barber_pack->id, barber_pack->done);
+	printf(">>> BARBEIRO FECHOU\n");
 
 	return NULL;
 }
@@ -228,28 +241,29 @@ int main(int argc, char **argv)
 
 	// Get Inputed Values - should get from argv[]
 	num_barbers = 1;
-	num_chairs = 10;
-	min_attended = 10;
+	num_chairs = 2;
+	min_attended = 1;
 
 	// Declare Semaphores
 	struct_semaphore chairs_customers;
 	struct_semaphore chairs_barbers;
 	struct_semaphore sleeping_barbers;
-	
+	pthread_mutex_t barber_verifier;
+
 	// Init Semaphores
-	sem_init(&chairs_customers.semaphore, 1, num_chairs);
+	sem_init(&(chairs_customers.semaphore), 1, num_chairs);
 	sem_init(&chairs_barbers.semaphore, 1, 0);
-	sem_init(&sleeping_barbers.semaphore, 1, num_barbers);
+	sem_init(&(sleeping_barbers.semaphore), 1, num_barbers);
+	barber_verifier = PTHREAD_MUTEX_INITIALIZER;
 
 	#if DEBUG_MODE
-		printf("Initialized Barber Semaphore. semaphore_chairs: %p\n", (void *) chairs_barbers.semaphore);
-		printf("Initialized Customers Semaphore. Memory: %p\n", (void *) chairs_customers.semaphore);
+	printf("Initialized Barber Semaphore. semaphore_chairs: %p\n", (void *) chairs_barbers.semaphore);
+	printf("Initialized Customers Semaphore. Memory: %p\n", (void *) chairs_customers.semaphore);
 	#endif
 
 	//Initialize Barbers
 	barber_pack *array_barbers = malloc(sizeof(barber_pack) * (num_barbers));
 	fill_barber_pack(array_barbers, &chairs_barbers, &chairs_customers, num_barbers, num_chairs, min_attended);
-
 
 	for (int i = 0; i < num_barbers; i++) 
 	{
@@ -263,7 +277,7 @@ int main(int argc, char **argv)
 	}
 
 	Sleep(1000);
-	int num_clients = 100;
+	int num_clients = 15000;
 	for (int i = 0; i < num_clients; i++)
 	{
 		// Instanciate Customers
@@ -271,15 +285,15 @@ int main(int argc, char **argv)
 		customer_pack->id = i;
 		customer_pack->array_barbers = array_barbers;
 		customer_pack->chairs_customers = &chairs_customers;
-		customer_pack->chairs_barbers = &chairs_barbers;
 		customer_pack->sleeping_barbers = &sleeping_barbers;
 		customer_pack->num_barbers = num_barbers;
 		customer_pack->haircut_signal = PTHREAD_COND_INITIALIZER;
 		customer_pack->lock_helper = PTHREAD_MUTEX_INITIALIZER;
+		customer_pack->barber_verifier = &barber_verifier;
 
 		// printf("Customer %d: customer_pack created. %p\n", customer_pack->id, (void *) customer_pack);
 
-		Sleep(1);
+		// Sleep(1);
 		int error_thread = pthread_create(&(customer_pack->thread_id), NULL, customer, customer_pack);
 
 		if (error_thread != 0)
