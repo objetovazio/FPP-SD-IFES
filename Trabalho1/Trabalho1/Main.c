@@ -12,7 +12,7 @@
 #define FALSE 0
 
 // Set TRUE or FALSE to show or not Debug Prints
-#define DEBUG_MODE FALSE
+#define DEBUG_MODE TRUE
 
 #pragma region Structs
 typedef struct supply
@@ -385,7 +385,7 @@ void *infected(void *thread_pack)
 				inf_pack->shared_objectives[1]++; // Add one lab that finished their objective
 				pthread_mutex_unlock(inf_pack->mutex_shared_objectives); // END OF CRITICAL REGION - mutex_shared_objectives
 
-				printf("> INF %d: Objective Completed. Objective Completed. Labs Completed: %d | Infected Completed %d \n", inf_id, inf_pack->shared_objectives[0], inf_pack->shared_objectives[1]);
+				printf("> INF %d: Objective Completed. Labs Completed: %d | Infected Completed %d \n", inf_id, inf_pack->shared_objectives[0], inf_pack->shared_objectives[1]);
 			}
 		}
 
@@ -413,7 +413,7 @@ int main(int argc, char **argv)
 	size_of_infected = 3;
 	total_supplies_by_lab = 2;
 	total_supplies_needed_infected = 2;
-	total_vaccines_objective = atoi(argv[1]);
+	total_vaccines_objective = 20;
 
 	// PLEASE TAKE CARE WITH size_of_supplies. This represents that exists 3 differents kinds of supplies
 	// But you will find in the code sometimes the operation `size_of_supplies * total_supplies_by_lab`. This means that the table of supplies will have 3*2 elements, in this case.
