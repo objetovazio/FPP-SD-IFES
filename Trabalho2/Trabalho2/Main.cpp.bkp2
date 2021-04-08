@@ -1,0 +1,80 @@
+#define _CRT_SECURE_NO_WARNINGS 1
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+
+#include <pthread.h>
+#include <semaphore.h>
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <windows.h>
+#include <vector>
+
+#define TRUE 1
+#define FALSE 0
+
+#define SUCCESS 0
+#define FAILURE -1
+
+#define SLEEPING 0
+#define WORKING 1
+
+#define WAITING 0
+#define ATTENDED 1
+
+// Set TRUE or FALSE to show or not Debug Prints
+#define DEBUG_MODE TRUE
+
+#pragma region Structs
+struct customer_pack;
+struct barber_pack;
+
+typedef struct struct_semaphore
+{
+	sem_t semaphore;
+} struct_semaphore;
+
+typedef struct customer_pack
+{
+	pthread_t thread_id;
+	int id;
+
+	struct barber_pack *array_barbers; // Array of Barbers 
+	int num_barbers; // Size of array_barbers
+
+	struct_semaphore *chairs_customers;    // Control the number of waiting chairs that are NOT occupied. Ex: If initialized value is 10, in a certain point the value is 6, means that 4 clients are waiting and 6 chairs are free.
+	struct_semaphore *sleeping_barbers;    // Control the number of sleeping barbers. Ex: If value is 2, there are 2 barbers that are sleeping.
+	pthread_mutex_t *barber_verifier;      // Mutex to block 1 customer to verify which barber is sleeping on array_barbers
+	pthread_cond_t haircut_signal;         // Conditional to Signalize Customer that Haircut is Done
+	pthread_mutex_t haircut_signal_helper; // Mutex that helps haircut_signal
+} customer_pack;
+
+typedef struct barber_pack
+{
+	pthread_t thread_id;
+	int id;
+
+	struct_semaphore *chairs_customers; // Control the number of waiting chairs that are NOT occupied. Ex: If initialized value is 10, in a certain point the value is 6, means that 4 clients are waiting and 6 chairs are free.
+	struct_semaphore *sleeping_barbers; // Control the number of sleeping barbers. Ex: If value is 2, there are 2 barbers that are sleeping.
+	struct customer_pack *customer;     // Customer Instance - Reference to the customer that is going to be attended
+
+	pthread_cond_t time_to_work_signal;         // Conditional to Signalize Barber that is time to work
+	pthread_mutex_t time_to_work_signal_helper; // Mutex that helps time_to_work_signal
+
+	struct_semaphore *barber_work_not_done;   // Control the number of barbers with work not done. If this arrives to 0, means that every barber finished his work.
+	pthread_mutex_t *mutex_shared_objectives; // Mutex that helps barber_work_not_done.
+
+	int num_chairs;
+	int num_barbers;
+	int objective;
+	int done;
+	int finished;
+	int status;
+} barber_pack;
+#pragma endregion
+
+int main(int argc, char **argv)
+{
+	int num_barbers, num_chairs, min_attended;
+
+	return 0;
+}
